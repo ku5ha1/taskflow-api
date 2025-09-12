@@ -1,5 +1,0 @@
-langchain[google-genai]
-python-dotenv
-fastapi 
-uvicorn 
-jinja2
