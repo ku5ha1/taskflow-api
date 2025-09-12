@@ -1,6 +1,7 @@
 from app.models.user import User 
 from pydantic import BaseModel, EmailStr
 import datetime as dt
+from typing import Optional
 
 class UserBase(BaseModel):
     username: str 
@@ -12,7 +13,7 @@ class UserCreate(UserBase):
 class UserOut(UserBase):
     id: int
     created_at: dt.datetime
-    updated_at: dt.datetime
+    updated_at: Optional[dt.datetime] = None
     
     class Config:
         from_attributes = True
