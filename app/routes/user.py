@@ -33,7 +33,7 @@ async def user_register(user: UserCreate, db: Session = Depends(get_db)):
 async def user_login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.username == user.username).first()
 
-    if db_user is None or not verify_password(user.password, db_user.hashed_password):
+    if db_user is None or not verify_password(user.password, str(db_user.hashed_password)):
         raise HTTPException(    
             status_code=401,
             detail="Invalid Username or Password"
@@ -50,7 +50,6 @@ async def user_login(user: UserLogin, db: Session = Depends(get_db)):
         } 
     }
 
-    
 @router.get("/me", response_model=UserOut)
 async def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
