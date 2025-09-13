@@ -40,3 +40,84 @@ async def create_project(
             status_code=500,
             detail="Failed to create project"
         )
+        
+@router.get("/all", response_model=ProjectList)
+async def get_all_projects(db: Session = Depends(get_db)):
+    projects = db.query(Project).all()
+    return {
+        "projectlist": projects
+    }
+    
+@router.get("/{project_id}", response_model=ProjectOut)
+async def get_single_project(project_id: int, db: Session = Depends(get_db)):
+    db_project = db.query(Project).filter(
+        Project.id == project_id
+    ).first()
+    if not db_project:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Project with {project_id} not found"
+        )
+    return db_project
+
+@router.put("/{project_id}", response_model=ProjectOut)
+async def update_project(
+    project_id: int,
+    project_data: ProjectCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_required)
+    ):
+    db_project = db.query(Project).filter(
+        Project.id == project_id
+    ).first()
+    if not db_project:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Project with id: {project_id} not found"
+        )
+    try:
+        db_project.name = project_data.name 
+        db_project.description = project_data.description 
+        
+        db.commit()
+        db.refresh(db_project)
+        
+        return db_project
+    
+    except Exception as e:
+        db.rollback()
+        print(f"Exception: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update project"
+        )
+        
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: int,
+    current_user: User = Depends(admin_required),
+    db: Session = Depends(get_db)
+):
+    db_project = db.query(Project).filter(
+        Project.id == project_id
+    ).first()
+    if not db_project:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Project with id: {project_id} not found"
+        )
+    try:
+        db.delete(db_project)
+        db.commit()
+        
+        return {
+            "message": "Project deleted successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Exception: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete project"
+        )
+    
