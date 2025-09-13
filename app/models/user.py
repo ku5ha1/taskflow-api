@@ -1,5 +1,6 @@
 from app.utils.database import Base 
 from sqlalchemy import Column, String, DateTime, Integer, Boolean
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func 
  
 class User(Base):
@@ -12,3 +13,5 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
+    
+    projects = relationship("Project", back_populates="creator")
