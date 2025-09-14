@@ -5,8 +5,9 @@ from app.utils.auth import hash_password, create_access_token, get_current_user,
 from app.utils.database import get_db
 from sqlalchemy.orm import Session
 from app.utils.depedency import admin_required
+from typing import List
 
-router = APIRouter(prefix="/user", tags=["User"])
+router = APIRouter(prefix="/users", tags=["User"])
 
 # @router.post("/register", response_model=UserOut)
 # async def user_register(user: UserCreate, db: Session = Depends(get_db)):
@@ -110,7 +111,7 @@ async def delete_user(
             detail=f"User with id {user_id} not found"
         )
     try:
-        db.delete(user_id)
+        db.delete(db_user)
         db.commit()
         return {"message": "User deleted successfully"}
     except Exception as e:
@@ -145,3 +146,11 @@ async def user_login(user: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 async def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.get("/all", response_model=List[UserOut])
+async def get_all_users(
+    current_user: User = Depends(admin_required),
+    db: Session = Depends(get_db)
+):
+    all_users = db.query(User).all()
+    return all_users
