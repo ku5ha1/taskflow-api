@@ -14,4 +14,5 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     
-    projects = relationship("Project", back_populates="creator")
+    projects_created = relationship("Project", back_populates="creator")
+    memberships = relationship("ProjectMembers", back_populates="user")
