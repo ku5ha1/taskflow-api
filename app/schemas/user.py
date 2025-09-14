@@ -18,6 +18,15 @@ class UserOut(UserBase):
     class Config:
         from_attributes = True
         
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+        
 class UserInDB(UserOut):
     hashed_password: str
     
