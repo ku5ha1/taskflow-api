@@ -141,3 +141,34 @@ async def get_all_tasks(
         Task.project_id == project_id
     ).all()
     return all_tasks
+
+@router.delete("/delete/{task_id}")
+async def delete_task(
+    project_id: int, 
+    task_id: int,
+    current_user: User = Depends(leader_or_admin_required),
+    db: Session = Depends(get_db)
+):
+    db_task = db.query(Task).filter(
+        Task.project_id == project_id,
+        Task.id == task_id
+    ).first()
+    if not db_task:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found"
+        )
+    try:
+        db.delete(db_task)
+        db.commit()
+    
+        return {
+            "message": "Task deleted succesfully"
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Exception: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not delete task"
+        )
