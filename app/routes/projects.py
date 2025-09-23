@@ -248,6 +248,12 @@ async def list_project_members(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if current_user.is_admin:
+        members = db.query(ProjectMembers).filter(
+        ProjectMembers.project_id == project_id
+    ).all()
+        return members
+    
     existing_user = db.query(ProjectMembers).filter(
         ProjectMembers.project_id == project_id,
         ProjectMembers.user_id == current_user.id
