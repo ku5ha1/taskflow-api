@@ -1,12 +1,14 @@
 from sqlalchemy.orm import Session 
 from app.utils.database import get_db 
-from app.utils.depedency import admin_required, leader_or_admin_required, get_current_user, can_view_task
+from app.utils.depedency import leader_or_admin_required, get_current_user, can_view_task
 from app.models.tasks import Task 
 from app.models.user import User 
 from app.models.project_members import ProjectMembers
-from app.schemas.tasks import TaskCreate, TaskOut, TaskList, TaskUpdate, TaskPriority, TaskStatus, TaskStatusUpdate
-from fastapi import APIRouter, Depends, HTTPException 
-from typing import List
+from app.schemas.project_members import ProjectMemberRole
+from app.schemas.tasks import TaskCreate, TaskOut, TaskList, TaskUpdate, TaskStatus, TaskStatusUpdate, TaskPriority
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List, Optional
+import datetime
 
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["Project Tasks"])
 
@@ -131,16 +133,68 @@ async def get_task(
 ):
     return db_task 
 
-@router.get("/all-tasks", response_model=List[TaskOut])
+import datetime
+
+@router.get("/", response_model=TaskList) 
 async def get_all_tasks(
     project_id: int,
-    current_user: User = Depends(leader_or_admin_required),
+    status: Optional[TaskStatus] = Query(None),
+    priority: Optional[TaskPriority] = Query(None),
+    assigned_to: Optional[int] = Query(None),
+    due_before: Optional[str] = Query(None),
+    due_after: Optional[str] = Query(None),
+    limit: Optional[int] = Query(None),
+    offset: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    all_tasks = db.query(Task).filter(
+    is_leader = db.query(ProjectMembers).filter(
+        ProjectMembers.project_id == project_id,
+        ProjectMembers.user_id == current_user.id,
+        ProjectMembers.role == ProjectMemberRole.LEADER.value
+    ).first()
+    
+    if not is_leader and not current_user.is_admin:
+        if assigned_to and assigned_to != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only view your own tasks."
+            )
+        assigned_to = current_user.id
+        
+    query = db.query(Task).filter(
         Task.project_id == project_id
-    ).all()
-    return all_tasks
+    )
+
+    if status is not None:
+        query = query.filter(Task.status == status.value)
+    if priority is not None:
+        query = query.filter(Task.priority == priority.value) 
+    if assigned_to is not None:
+        query = query.filter(Task.assigned_to == assigned_to)
+        
+    if due_before is not None:
+        try:
+            due_before_dt = datetime.datetime.fromisoformat(due_before)
+            query = query.filter(Task.due_date < due_before_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format for due_before. Use YYYY-MM-DD.")
+            
+    if due_after is not None: 
+        try:
+            due_after_dt = datetime.datetime.fromisoformat(due_after)
+            query = query.filter(Task.due_date > due_after_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format for due_after. Use YYYY-MM-DD.")
+
+    if limit is not None:
+        query = query.limit(limit)
+    if offset is not None:
+        query = query.offset(offset)
+        
+    tasks = query.all()
+    
+    return tasks
 
 @router.delete("/delete/{task_id}")
 async def delete_task(
