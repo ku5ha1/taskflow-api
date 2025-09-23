@@ -1,11 +1,12 @@
 from sqlalchemy.orm import Session 
 from app.utils.database import get_db 
-from app.utils.depedency import admin_required, leader_or_admin_required, get_current_user
+from app.utils.depedency import admin_required, leader_or_admin_required, get_current_user, can_view_task
 from app.models.tasks import Task 
 from app.models.user import User 
 from app.models.project_members import ProjectMembers
 from app.schemas.tasks import TaskCreate, TaskOut, TaskList, TaskUpdate, TaskPriority, TaskStatus, TaskStatusUpdate
 from fastapi import APIRouter, Depends, HTTPException 
+from typing import List
 
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["Project Tasks"])
 
@@ -123,3 +124,20 @@ async def modify_task_status(
             status_code=500,
             detail="Could not modify task"
         )
+        
+@router.get("/{task_id}", response_model=TaskOut)
+async def get_task(
+    db_task: Task = Depends(can_view_task),
+):
+    return db_task 
+
+@router.get("/all-tasks", response_model=List[TaskOut])
+async def get_all_tasks(
+    project_id: int,
+    current_user: User = Depends(leader_or_admin_required),
+    db: Session = Depends(get_db)
+):
+    all_tasks = db.query(Task).filter(
+        Task.project_id == project_id
+    ).all()
+    return all_tasks
