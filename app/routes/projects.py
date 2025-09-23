@@ -3,10 +3,12 @@ from app.utils.depedency import admin_required, leader_or_admin_required
 from app.models.user import User 
 from app.models.projects import Project
 from app.utils.database import get_db 
+from app.utils.auth import get_current_user
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectList, ProjectUpdate
 from sqlalchemy.orm import Session
 from app.models.project_members import ProjectMembers
 from app.schemas.project_members import ProjectMemberCreate, ProjectMemberOut, ProjectMemberUpdate, ProjectMemberRole
+from typing import List
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -239,3 +241,23 @@ async def remove_member_from_project(
             status_code=500,
             detail="Could not remove member from the project"
         )
+        
+@router.get("/{project_id}/members", response_model=List[ProjectMemberOut])
+async def list_project_members(
+    project_id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    existing_user = db.query(ProjectMembers).filter(
+        ProjectMembers.project_id == project_id,
+        ProjectMembers.user_id == current_user.id
+    ).first()
+    if not existing_user:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have the permission to view all members of this project"
+        )
+    members = db.query(ProjectMembers).filter(
+        ProjectMembers.project_id == project_id
+    ).all()
+    return members 

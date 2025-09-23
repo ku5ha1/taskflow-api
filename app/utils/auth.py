@@ -76,4 +76,3 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         print("==================")
         raise
     
-print(hash_password('password123'))
