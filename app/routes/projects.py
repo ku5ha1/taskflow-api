@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from app.utils.depedency import admin_required
+from app.utils.depedency import admin_required, leader_or_admin_required
 from app.models.user import User 
 from app.models.projects import Project
-from app.utils.database import Base, get_db 
+from app.utils.database import get_db 
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectList, ProjectUpdate
 from sqlalchemy.orm import Session
 from app.models.project_members import ProjectMembers
@@ -161,4 +161,48 @@ async def assign_leader(
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while assigning the leader."
+        )
+        
+@router.post("/{project_id}/add-member", response_model=ProjectMemberOut)
+async def add_member(
+    project_id: int,
+    member_data: ProjectMemberCreate,
+    current_user: User = Depends(leader_or_admin_required),
+    db: Session = Depends(get_db)
+):
+    existing_project = db.query(Project).filter(
+        Project.id == project_id
+    ).first()
+    if not existing_project:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project id :{project_id} does not exist"
+        )
+    user_membership = db.query(ProjectMembers).filter(
+        ProjectMembers.project_id == project_id,
+        ProjectMembers.user_id == member_data.user_id
+    ).first()
+    if user_membership:
+        raise HTTPException(
+            status_code=409, 
+            detail="User already a member"
+        )
+    try:
+        new_user_membership = ProjectMembers(
+        project_id = project_id,
+        user_id = member_data.user_id,
+        role = member_data.role.value
+    )
+        db.add(new_user_membership)
+        db.commit()
+        db.refresh(new_user_membership)
+        
+        return new_user_membership
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Database error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred while adding a new member."
         )

@@ -14,23 +14,29 @@ async def admin_required(current_user: User = Depends(get_current_user)):
         )
     return current_user
 
-async def leader_required(
-    project_id: int, 
-    current_user: User = Depends(get_current_user), 
+async def leader_or_admin_required(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if current_user.is_admin:
+        return current_user
+
     user_project_membership = db.query(ProjectMembers).filter(
         ProjectMembers.user_id == current_user.id,
         ProjectMembers.project_id == project_id
     ).first()
+
     if not user_project_membership:
         raise HTTPException(
             status_code=403,
-            detail=f"You are not a member of this project"
+            detail="You are not a member of this project."
         )
+
     if user_project_membership.role != ProjectMemberRole.LEADER.value:
         raise HTTPException(
             status_code=403,
-            detail="You are not a project leader in this project"
+            detail="You must be an admin or a project leader to add members."
         )
+
     return current_user
