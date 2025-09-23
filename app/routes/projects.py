@@ -120,4 +120,3 @@ async def delete_project(
             status_code=500,
             detail="Failed to delete project"
         )
-    
