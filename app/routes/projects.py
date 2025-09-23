@@ -5,6 +5,8 @@ from app.models.projects import Project
 from app.utils.database import Base, get_db 
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectList, ProjectUpdate
 from sqlalchemy.orm import Session
+from app.models.project_members import ProjectMembers
+from app.schemas.project_members import ProjectMemberCreate, ProjectMemberOut, ProjectMemberUpdate, ProjectMemberRole
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -119,4 +121,44 @@ async def delete_project(
         raise HTTPException(
             status_code=500,
             detail="Failed to delete project"
+        )
+        
+@router.post("/{project_id}/members/assign-leader", response_model=ProjectMemberOut)
+async def assign_leader(
+    project_id: int,
+    member_data: ProjectMemberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_required)
+):
+    db_project = db.query(Project).filter(
+        Project.id == project_id
+    ).first()
+    if not db_project:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project with id: {project_id} does nto exist"
+        )
+    existing_member = db.query(ProjectMembers).filter(
+        ProjectMembers.project_id == project_id,
+        ProjectMembers.user_id == member_data.user_id
+    ).first()
+    try:
+        new_project_assignment = ProjectMembers(
+            project_id=project_id,
+            user_id=member_data.user_id,
+            role=ProjectMemberRole.LEADER.value
+        )
+        
+        db.add(new_project_assignment)
+        db.commit()
+        db.refresh(new_project_assignment)
+        
+        return new_project_assignment
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Database error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred while assigning the leader."
         )

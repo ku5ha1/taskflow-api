@@ -2,14 +2,14 @@ from app.models.project_members import ProjectMembers
 from pydantic import BaseModel
 from typing import Optional
 from app.schemas.project import ProjectOut
-from enum import Enum
+import enum
 
-class ProjectMemberRole(Enum, str):
+class ProjectMemberRole(str, enum.Enum):
     LEADER = "leader"
     MEMBER = "member"
 
 class ProjectMemberCreate(BaseModel):
-    user_id: int  
+    user_id: int
     role: ProjectMemberRole
     
 class ProjectMemberUpdate(BaseModel):
