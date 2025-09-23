@@ -41,3 +41,6 @@ class TaskUpdate(BaseModel):
     
 class TaskList(BaseModel):
     tasks: List[TaskOut]
+    
+class TaskStatusUpdate(BaseModel):
+    status: TaskStatus
