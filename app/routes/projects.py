@@ -206,3 +206,36 @@ async def add_member(
             status_code=500,
             detail="An unexpected error occurred while adding a new member."
         )
+        
+@router.delete("/{project_id}/remove-member/{user_id}")
+async def remove_member_from_project(
+    project_id: int,
+    user_id: int,
+    current_user: User = Depends(leader_or_admin_required),
+    db: Session = Depends(get_db)
+):
+    existing_user = db.query(ProjectMembers).filter(
+        ProjectMembers.project_id == project_id,
+        ProjectMembers.user_id == user_id
+    ).first()
+    
+    if not existing_user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"User with id: {user_id} does not exist in the Project"
+        )
+    try:
+        db.delete(existing_user)
+        db.commit()
+        
+        return {
+            "message": "User removed from the project successfully"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Exception: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not remove member from the project"
+        )
