@@ -19,15 +19,23 @@ async def create_task(
     current_user: User = Depends(leader_or_admin_required),
     db: Session = Depends(get_db)
 ):
-    membership_exists = db.query(ProjectMembers).filter(
+    membership = db.query(ProjectMembers).filter(
         ProjectMembers.project_id == project_id,
-        ProjectMembers.user_id == task_data.assigned_to
+        ProjectMembers.id == task_data.assigned_to_user
     ).first()
-    if not membership_exists:
+
+    if not membership:
+        membership = db.query(ProjectMembers).filter(
+            ProjectMembers.project_id == project_id,
+            ProjectMembers.user_id == task_data.assigned_to_user
+        ).first()
+
+    if not membership:
         raise HTTPException(
             status_code=404,
-            detail="Project or member does not exist"
+            detail="Project membership not found for the provided assignee."
         )
+
     try:
         new_task = Task(
         project_id = project_id,
@@ -36,7 +44,7 @@ async def create_task(
         status = TaskStatus.PENDING.value,
         priority = task_data.priority, 
         due_date = task_data.due_date,
-        assigned_to_user = task_data.assigned_to_user
+        assigned_to_user = membership.id
     )
         db.add(new_task)
         db.commit()
@@ -107,7 +115,7 @@ async def modify_task_status(
             status_code=404,
             detail="Task not found"
         )
-    if db_task.assigned_to != current_user.id:
+    if db_task.assigned_to_user != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="You are not permitted to modify this task's status."
