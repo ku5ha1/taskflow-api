@@ -68,7 +68,7 @@ async def can_view_task(
     if project_leader:
             return db_task
         
-    if db_task.assigned_to == current_user.id:
+    if db_task.assigned_to_user == current_user.id:
             return db_task
         
     raise HTTPException(

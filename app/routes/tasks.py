@@ -133,7 +133,6 @@ async def get_task(
 ):
     return db_task 
 
-import datetime
 
 @router.get("/", response_model=TaskList) 
 async def get_all_tasks(
