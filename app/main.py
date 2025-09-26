@@ -13,7 +13,7 @@ app.include_router(user_router)
 app.include_router(project_router)
 app.include_router(task_router)
 
-@app.get("/")
+@app.get("/health")
 async def get_health():
     return {"message": "API running successfully"}
 

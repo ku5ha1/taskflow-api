@@ -5,7 +5,7 @@ Backend-only Task & Project Management API built with FastAPI, SQLAlchemy, and P
 ### Tech
 - FastAPI, Pydantic
 - SQLAlchemy, Alembic
-- PostgreSQL
+- PostgreSQL (NeonDB)
 - JWT (JOSE), bcrypt
 
 ### Setup
@@ -43,7 +43,7 @@ OpenAPI docs at `/docs`.
 - Login: `POST /users/login` → returns `access_token`
 - Use: `Authorization: Bearer <token>`
 
-### Endpoints (minimal)
+### Endpoints
 
 - Health
   - GET `/health`
@@ -75,5 +75,5 @@ OpenAPI docs at `/docs`.
   - DELETE `/delete/{task_id}` (leader/admin)
 
 ### Notes
-- Seed users: admin / alice / bob (see `seed.py`)
 - Health check and Swagger available when server is running.
+- url/docs for Swagger docs
