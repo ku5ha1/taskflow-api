@@ -20,7 +20,7 @@ class TaskCreate(BaseModel):
     priority: TaskPriority 
     due_date: datetime 
     project_id: int 
-    assigned_to: int
+    assigned_to_user: int
 
 class TaskOut(BaseModel):
     id: int 

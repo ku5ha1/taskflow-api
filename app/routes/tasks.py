@@ -36,7 +36,7 @@ async def create_task(
         status = TaskStatus.PENDING.value,
         priority = task_data.priority, 
         due_date = task_data.due_date,
-        assigned_to = task_data.assigned_to
+        assigned_to_user = task_data.assigned_to_user
     )
         db.add(new_task)
         db.commit()
