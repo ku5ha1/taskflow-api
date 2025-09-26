@@ -30,7 +30,7 @@ class TaskOut(BaseModel):
     priority: TaskPriority 
     due_date: datetime 
     project_id: int 
-    assigned_to: int
+    assigned_to_user: int
     
 class TaskUpdate(BaseModel):
     name: Optional[str] = None 

@@ -194,7 +194,7 @@ async def get_all_tasks(
         
     tasks = query.all()
     
-    return tasks
+    return {"tasks": tasks}
 
 @router.delete("/delete/{task_id}")
 async def delete_task(
