@@ -62,9 +62,10 @@ OpenAPI docs at `/docs`.
   - GET `/projects/{project_id}`
   - PUT `/projects/{project_id}` (admin)
   - DELETE `/projects/{project_id}` (admin)
+  - POST `/projects/{project_id}/members/assign-leader` (admin)  
+  - POST `/projects/{project_id}/add-member` (admin/leader)  
   - GET `/projects/{project_id}/members` (auth)
   - DELETE `/projects/{project_id}/remove-member/{user_id}` (leader/admin)
-  - Member management (if present): assign leader / add member
 
 - Tasks (`/projects/{project_id}/tasks`)
   - POST `/create` (leader/admin)
