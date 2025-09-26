@@ -14,3 +14,4 @@ class ProjectMembers(Base):
     
     project = relationship("Project", back_populates="members")
     user = relationship("User", back_populates="memberships")
+    tasks = relationship("Task", back_populates="assigned_to")
