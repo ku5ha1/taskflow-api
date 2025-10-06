@@ -14,7 +14,6 @@ from redis import asyncio as aioredis
 from starlette.concurrency import run_in_threadpool
 import json
 
-ALL_PROJECTS_KEY = "projects:all"
 CACHE_TTL = 600
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -57,6 +56,7 @@ async def get_all_projects(
     db: Session = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_client)
 ):
+    ALL_PROJECTS_KEY = "projects:all"
     cached = await redis.get(ALL_PROJECTS_KEY)
     if cached: 
         return json.loads(cached) 
@@ -73,15 +73,27 @@ async def get_all_projects(
     return response_data_dict
     
 @router.get("/{project_id}", response_model=ProjectOut)
-async def get_single_project(project_id: int, db: Session = Depends(get_db)):
-    db_project = db.query(Project).filter(
-        Project.id == project_id
-    ).first()
+async def get_single_project(
+    project_id: int, 
+    db: Session = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis_client)
+    ):
+    SINGLE_PROJECT_KEY = f"project:{project_id}"
+    cached = await redis.get(SINGLE_PROJECT_KEY)
+    if cached:
+        return json.loads(cached)
+    def sync_db_call():
+        return db.query(Project).filter(Project.id == project_id).first()
+    db_project = await run_in_threadpool(sync_db_call)
+    
     if not db_project:
         raise HTTPException(
             status_code=403,
             detail=f"Project with {project_id} not found"
         )
+    project_json = ProjectOut.model_validate(db_project).model_dump_json()
+    await redis.set(SINGLE_PROJECT_KEY, project_json, ex=CACHE_TTL)
+
     return db_project
 
 @router.put("/{project_id}", response_model=ProjectOut)
