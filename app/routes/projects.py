@@ -9,6 +9,13 @@ from sqlalchemy.orm import Session
 from app.models.project_members import ProjectMembers
 from app.schemas.project_members import ProjectMemberCreate, ProjectMemberOut, ProjectMemberUpdate, ProjectMemberRole
 from typing import List
+from app.utils.redis_client import get_redis_client
+from redis import asyncio as aioredis
+from starlette.concurrency import run_in_threadpool
+import json
+
+ALL_PROJECTS_KEY = "projects:all"
+CACHE_TTL = 600
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -46,11 +53,24 @@ async def create_project(
         )
         
 @router.get("/all", response_model=ProjectList)
-async def get_all_projects(db: Session = Depends(get_db)):
-    projects = db.query(Project).all()
-    return {
-        "projectlist": projects
-    }
+async def get_all_projects(
+    db: Session = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis_client)
+):
+    cached = await redis.get(ALL_PROJECTS_KEY)
+    if cached: 
+        return json.loads(cached) 
+    def sync_db_call():
+        return db.query(Project).all()
+        
+    projects = await run_in_threadpool(sync_db_call)
+
+    response_data_dict = {"projectlist": projects}
+ 
+    serialized_data = ProjectList.model_validate(response_data_dict).model_dump_json()
+
+    await redis.set(ALL_PROJECTS_KEY, serialized_data, ex=CACHE_TTL)
+    return response_data_dict
     
 @router.get("/{project_id}", response_model=ProjectOut)
 async def get_single_project(project_id: int, db: Session = Depends(get_db)):
