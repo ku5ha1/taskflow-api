@@ -1,6 +1,6 @@
 ## TaskFlow API
 
-Backend-only Task & Project Management API built with FastAPI, SQLAlchemy, and PostgreSQL.
+Task & Project Management API built with FastAPI, SQLAlchemy, and PostgreSQL.
 
 ### Tech
 - FastAPI, Pydantic
