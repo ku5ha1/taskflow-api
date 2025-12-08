@@ -10,3 +10,4 @@ pydantic[email]
 alembic
 redis
 appwrite
+python-multipart
