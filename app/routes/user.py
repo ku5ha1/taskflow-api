@@ -50,7 +50,10 @@ async def create_user(
         new_user = User(
             username = user_data.username,
             email = user_data.email,
-            hashed_password = hashed_password
+            hashed_password = hashed_password,
+            profile_picture=user_data.profile_picture,
+            bio=user_data.bio,
+            timezone=user_data.timezone
         )
         db.add(new_user)
         db.commit()
@@ -85,6 +88,12 @@ async def update_user(
             db_user.email = user_data.email
         if user_data.password:
             db_user.hashed_password = hash_password(user_data.password)
+        if user_data.profile_picture is not None:
+            db_user.profile_picture = user_data.profile_picture
+        if user_data.bio is not None:
+            db_user.bio = user_data.bio
+        if user_data.timezone is not None:
+            db_user.timezone = user_data.timezone
 
         db.commit()
         db.refresh(db_user)

@@ -21,6 +21,10 @@ class TaskCreate(BaseModel):
     due_date: datetime 
     project_id: int 
     assigned_to_user: int
+    estimated_hours: Optional[int] = None
+    actual_hours: Optional[int] = None
+    tags: Optional[str] = None
+    attachments: Optional[str] = None
 
 class TaskOut(BaseModel):
     id: int 
@@ -31,6 +35,10 @@ class TaskOut(BaseModel):
     due_date: datetime 
     project_id: int 
     assigned_to_user: int
+    estimated_hours: Optional[int] = None
+    actual_hours: Optional[int] = None
+    tags: Optional[str] = None
+    attachments: Optional[str] = None
     
 class TaskUpdate(BaseModel):
     name: Optional[str] = None 
@@ -38,6 +46,10 @@ class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None 
     priority: Optional[TaskPriority] = None 
     due_date: Optional[datetime] = None
+    estimated_hours: Optional[int] = None
+    actual_hours: Optional[int] = None
+    tags: Optional[str] = None
+    attachments: Optional[str] = None
     
 class TaskList(BaseModel):
     tasks: List[TaskOut]

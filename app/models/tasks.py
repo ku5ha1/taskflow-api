@@ -12,6 +12,10 @@ class Task(Base):
     status = Column(String(20))
     priority = Column(String(10))
     due_date = Column(DateTime)
+    estimated_hours = Column(Integer, nullable=True)
+    actual_hours = Column(Integer, nullable=True)
+    tags = Column(String, nullable=True)  # comma-separated
+    attachments = Column(String, nullable=True)  # comma-separated URLs/paths
     project_id = Column(Integer, ForeignKey('projects.id'), nullable=False)
     assigned_to_user = Column(Integer, ForeignKey('project_members.id'))
     

@@ -10,6 +10,9 @@ class Project(Base):
     name = Column(String, index=True)
     description = Column(String(100))
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
+    status = Column(String(30), default="active")
+    deadline = Column(DateTime, nullable=True)
+    tags = Column(String, nullable=True)  # comma-separated
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     

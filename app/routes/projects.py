@@ -35,7 +35,10 @@ async def create_project(
         new_project = Project(
             name = project_data.name,
             description = project_data.description,
-            created_by = current_user.id
+            created_by = current_user.id,
+            status = project_data.status or "active",
+            deadline = project_data.deadline,
+            tags = project_data.tags
         )
         db.add(new_project)
         db.commit()
@@ -99,7 +102,7 @@ async def get_single_project(
 @router.put("/{project_id}", response_model=ProjectOut)
 async def update_project(
     project_id: int,
-    project_data: ProjectCreate, 
+    project_data: ProjectUpdate, 
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_required)
     ):
@@ -112,8 +115,16 @@ async def update_project(
             detail=f"Project with id: {project_id} not found"
         )
     try:
-        db_project.name = project_data.name  
-        db_project.description = project_data.description  
+        if project_data.name is not None:
+            db_project.name = project_data.name  
+        if project_data.description is not None:
+            db_project.description = project_data.description  
+        if project_data.status is not None:
+            db_project.status = project_data.status
+        if project_data.deadline is not None:
+            db_project.deadline = project_data.deadline
+        if project_data.tags is not None:
+            db_project.tags = project_data.tags
         
         db.commit()
         db.refresh(db_project)

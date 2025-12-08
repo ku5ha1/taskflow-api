@@ -44,7 +44,11 @@ async def create_task(
         status = TaskStatus.PENDING.value,
         priority = task_data.priority, 
         due_date = task_data.due_date,
-        assigned_to_user = membership.id
+        assigned_to_user = membership.id,
+        estimated_hours = task_data.estimated_hours,
+        actual_hours = task_data.actual_hours,
+        tags = task_data.tags,
+        attachments = task_data.attachments
     )
         db.add(new_task)
         db.commit()
@@ -85,6 +89,14 @@ async def update_task(
             db_task.priority = new_task_data.priority
         if new_task_data.due_date is not None:
             db_task.due_date = new_task_data.due_date 
+        if new_task_data.estimated_hours is not None:
+            db_task.estimated_hours = new_task_data.estimated_hours
+        if new_task_data.actual_hours is not None:
+            db_task.actual_hours = new_task_data.actual_hours
+        if new_task_data.tags is not None:
+            db_task.tags = new_task_data.tags
+        if new_task_data.attachments is not None:
+            db_task.attachments = new_task_data.attachments
         db.commit()
         db.refresh(db_task)
         
