@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status, File, UploadFile
 from app.models.user import User 
 from app.schemas.user import UserCreate, UserOut, UserLogin, UserUpdate
 from app.utils.auth import hash_password, create_access_token, get_current_user, verify_password
@@ -6,8 +6,15 @@ from app.utils.database import get_db
 from sqlalchemy.orm import Session
 from app.utils.depedency import admin_required
 from typing import List
+from app.utils.appwrite_service import upload_bytes_to_bucket
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter(prefix="/users", tags=["User"])
+
+DEFAULT_AVATAR_URL = os.getenv("DEFAULT_AVATAR_URL", "https://via.placeholder.com/150")
 
 # @router.post("/register", response_model=UserOut)
 # async def user_register(user: UserCreate, db: Session = Depends(get_db)):
@@ -46,14 +53,15 @@ async def create_user(
             detail=f"Email already registered"
         )
     hashed_password = hash_password(user_data.password)
+    profile_picture = user_data.profile_picture or DEFAULT_AVATAR_URL
     try:
         new_user = User(
             username = user_data.username,
             email = user_data.email,
             hashed_password = hashed_password,
-            profile_picture=user_data.profile_picture,
+            profile_picture=profile_picture,
             bio=user_data.bio,
-            timezone=user_data.timezone
+            timezone=user_data.timezone or "UTC"
         )
         db.add(new_user)
         db.commit()
@@ -155,6 +163,41 @@ async def user_login(user: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 async def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.patch("/me/update-profile-picture", response_model=UserOut)
+async def update_picture(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        content = await file.read()
+        filename = file.filename or f"profile_pic_{current_user.id}"
+        
+        uploaded_info = upload_bytes_to_bucket(
+            filename=filename, 
+            content=content,
+        )
+        
+        new_profile_url = uploaded_info["url"]
+        
+        current_user.profile_picture = new_profile_url
+        db.commit()
+        db.refresh(current_user)
+        
+        return current_user
+
+    except RuntimeError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update profile picture: {str(e)}"
+        )
+    finally:
+        await file.close()
 
 @router.get("/all", response_model=List[UserOut])
 async def get_all_users(
