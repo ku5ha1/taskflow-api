@@ -115,7 +115,9 @@ async def modify_task_status(
             status_code=404,
             detail="Task not found"
         )
-    if db_task.assigned_to_user != current_user.id:
+    # assigned_to_user stores project_members.id, so match against the membership's user_id
+    membership = db.query(ProjectMembers).filter(ProjectMembers.id == db_task.assigned_to_user).first()
+    if not membership or membership.user_id != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="You are not permitted to modify this task's status."
@@ -178,7 +180,7 @@ async def get_all_tasks(
     if priority is not None:
         query = query.filter(Task.priority == priority.value) 
     if assigned_to is not None:
-        query = query.filter(Task.assigned_to == assigned_to)
+        query = query.filter(Task.assigned_to_user == assigned_to)
         
     if due_before is not None:
         try:

@@ -2,7 +2,7 @@ from redis import asyncio as aioredis
 from typing import AsyncGenerator
 
 REDIS_URL = "redis://localhost:6379/0" 
-redis_client: aioredis.Redis = None 
+redis_client: aioredis.Redis = None  
 
 async def get_redis_client() -> AsyncGenerator[aioredis.Redis, None]:
     global redis_client

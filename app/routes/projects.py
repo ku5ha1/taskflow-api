@@ -112,8 +112,8 @@ async def update_project(
             detail=f"Project with id: {project_id} not found"
         )
     try:
-        db_project.name = project_data.name 
-        db_project.description = project_data.description 
+        db_project.name = project_data.name  
+        db_project.description = project_data.description  
         
         db.commit()
         db.refresh(db_project)
@@ -280,7 +280,7 @@ async def list_project_members(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if current_user.is_admin:
+    if current_user.is_admin: # type: ignore
         members = db.query(ProjectMembers).filter(
         ProjectMembers.project_id == project_id
     ).all()
