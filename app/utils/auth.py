@@ -55,11 +55,6 @@ def decode_access_token(token: str):
         )   
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    print("=== AUTH DEBUG ===")
-    print("Token received:", token)
-    print("SECRET_KEY:", SECRET_KEY)
-    print("ALGORITHM:", ALGORITHM)
-    
     try:
         payload = decode_access_token(token)
         print("Decoded payload:", payload)

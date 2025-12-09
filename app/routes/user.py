@@ -9,6 +9,7 @@ from typing import List
 from app.utils.appwrite_service import upload_bytes_to_bucket
 import os
 from dotenv import load_dotenv
+import datetime as dt
 
 load_dotenv()
 
@@ -150,6 +151,9 @@ async def user_login(user: UserLogin, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token({"sub": str(db_user.id)})
+    db_user.last_login = dt.datetime.utcnow()
+    db.commit()
+    db.refresh(db_user)
     return {
         "access_token": access_token,
         "token_type": "Bearer",
@@ -189,11 +193,11 @@ async def update_picture(
 
     except RuntimeError as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to update profile picture: {str(e)}"
         )
     finally:
