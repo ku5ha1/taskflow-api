@@ -20,3 +20,4 @@ class User(Base):
     
     projects_created = relationship("Project", back_populates="creator")
     memberships = relationship("ProjectMembers", back_populates="user")
+    uploaded_files = relationship("FileMetadata", back_populates="uploader")

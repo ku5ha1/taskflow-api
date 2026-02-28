@@ -6,38 +6,14 @@ from app.utils.database import get_db
 from sqlalchemy.orm import Session
 from app.utils.depedency import admin_required
 from typing import List
-from app.utils.appwrite_service import upload_bytes_to_bucket
-import os
-from dotenv import load_dotenv
+from app.utils.storage import StorageService
+from app.config import settings
 import datetime as dt
-
-load_dotenv()
 
 router = APIRouter(prefix="/users", tags=["User"])
 
-DEFAULT_AVATAR_URL = os.getenv("DEFAULT_AVATAR_URL", "https://via.placeholder.com/150")
-
-# @router.post("/register", response_model=UserOut)
-# async def user_register(user: UserCreate, db: Session = Depends(get_db)):
-#     db_user = db.query(User).filter(
-#         User.username == user.username or User.email == user.email
-#     ).first()
-#     if db_user:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Username or Email already in use"
-#         )    
-#     hashed_password = hash_password(user.password)
-#     new_user = User(
-#         username = user.username,
-#         email = user.email,
-#         hashed_password = hashed_password
-#     )
-#     db.add(new_user)
-#     db.commit()
-#     db.refresh(new_user)
-    
-#     return new_user
+# Initialize StorageService with settings
+storage = StorageService()
 
 @router.post("/create", response_model=UserOut)
 async def create_user(
@@ -54,7 +30,7 @@ async def create_user(
             detail=f"Email already registered"
         )
     hashed_password = hash_password(user_data.password)
-    profile_picture = user_data.profile_picture or DEFAULT_AVATAR_URL
+    profile_picture = user_data.profile_picture or settings.default_avatar_url
     try:
         new_user = User(
             username = user_data.username,
@@ -70,7 +46,6 @@ async def create_user(
         return new_user
     except Exception as e:
         db.rollback()
-        print(f"Exception: {e}")
         raise HTTPException(
             status_code=500,
             detail="Could not add user"
@@ -110,7 +85,6 @@ async def update_user(
     
     except Exception as e:
         db.rollback()
-        print(f"Exception: {e}")
         raise HTTPException(
             status_code=500,
             detail="Could not update user"
@@ -134,7 +108,6 @@ async def delete_user(
         return {"message": "User deleted successfully"}
     except Exception as e:
         db.rollback()
-        print(f"Exception: {e}")
         raise HTTPException(
             status_code=500,
             detail="Could not delete user"
@@ -177,23 +150,23 @@ async def update_picture(
     try:
         content = await file.read()
         filename = file.filename or f"profile_pic_{current_user.id}"
+        content_type = file.content_type or "image/jpeg"
         
-        uploaded_info = upload_bytes_to_bucket(
-            filename=filename, 
-            content=content,
+        # Upload to MinIO and store metadata
+        upload_result = await storage.upload_file(
+            file_content=content,
+            filename=filename,
+            content_type=content_type,
+            user_id=current_user.id
         )
         
-        new_profile_url = uploaded_info["url"]
-        
-        current_user.profile_picture = new_profile_url
+        # Store signed URL in user profile
+        current_user.profile_picture = upload_result["url"]
         db.commit()
         db.refresh(current_user)
         
         return current_user
 
-    except RuntimeError as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         db.rollback()
         raise HTTPException(

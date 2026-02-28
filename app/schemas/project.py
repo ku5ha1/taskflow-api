@@ -32,11 +32,9 @@ class ProjectOut(ProjectBase):
     
     class Config: 
         from_attributes=True
-        orm_mode=True
 
 class ProjectList(BaseModel):
     projectlist: List[ProjectOut]
     
     class Config: 
         from_attributes=True
-        orm_mode=True

@@ -1,19 +1,23 @@
-from dotenv import load_dotenv  
-import os 
-from sqlalchemy import create_engine 
+import logging
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker 
 from sqlalchemy.ext.declarative import declarative_base 
+from sqlalchemy.pool import QueuePool
+from app.config import settings
 
-load_dotenv() 
-
-DATABASE_URL = os.getenv("DATABASE_URL") 
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL not found")
+logger = logging.getLogger(__name__)
 
 engine = create_engine(
-    DATABASE_URL,
+    settings.database_url,
+    poolclass=QueuePool,
+    pool_size=5,
+    max_overflow=10,
     pool_pre_ping=True,
-    pool_recycle=300
+    pool_recycle=300,
+    connect_args={
+        "connect_timeout": 10,
+        "options": "-c timezone=utc"
+    }
 )
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -25,7 +29,20 @@ async def get_db():
     try:
         yield db
     except Exception as e:
-        db.close()
-        raise e
+        db.rollback()
+        logger.error(f"Database session error: {e}")
+        raise
     finally:
         db.close()
+
+
+async def check_db_health() -> bool:
+    """Health check for database connectivity"""
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return True
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        return False

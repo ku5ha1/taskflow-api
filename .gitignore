@@ -1,9 +1,13 @@
 venv
 .env
+.env.*
+!.env.example
 pycache__
 *.pyc
-__pycache__ 
-
+__pycache__
 
 seed.py
 enhancements.md
+tasksheet.txt
+wsl.localhost/
+celerybeat-schedule

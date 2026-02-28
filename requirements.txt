@@ -7,7 +7,9 @@ python-jose
 passlib[bcrypt]
 bcrypt==3.2.2
 pydantic[email]
+pydantic-settings
 alembic
 redis
-appwrite
 python-multipart
+celery
+boto3
