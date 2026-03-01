@@ -12,3 +12,18 @@ redis
 python-multipart
 celery
 boto3
+
+
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-cov
+httpx
+
+# Code quality
+black
+isort
+flake8
+mypy
+bandit
+safety
