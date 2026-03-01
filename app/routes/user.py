@@ -106,7 +106,7 @@ async def list_users(
     db: Session = Depends(get_db)
 ):
     """Get all users (admin only) - GET /users"""
-    all_users = db.query(User).all()
+    all_users = db.query(User).filter(User.is_deleted == False).all()
     return all_users
 
 
@@ -164,20 +164,25 @@ async def update_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: int, 
+    user_id: int,
     current_user: User = Depends(admin_required),
     db: Session = Depends(get_db)
 ):
-    """Delete user (admin only) - DELETE /users/{user_id}"""
-    db_user = db.query(User).filter(User.id == user_id).first()
-    
+    """Soft delete user (admin only) - DELETE /users/{user_id}"""
+    db_user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
+
     if not db_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with id {user_id} not found"
         )
-    
-    db.delete(db_user)
+
+    # Soft delete
+    db_user.is_deleted = True
+    db_user.deleted_at = dt.datetime.utcnow()
+    db_user.deleted_by = current_user.id
+    db.flush()
+
     return None
 
 

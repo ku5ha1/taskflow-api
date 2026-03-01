@@ -69,18 +69,16 @@ async def list_projects(
     """Get all projects - GET /projects"""
     ALL_PROJECTS_KEY = "projects:all"
     cached = await redis.get(ALL_PROJECTS_KEY)
-    
+
     if cached:
         return json.loads(cached)
-    
-    def sync_db_call():
-        return db.query(Project).all()
 
-    projects = await run_in_threadpool(sync_db_call)
+    # Query only non-deleted projects
+    projects = db.query(Project).filter(Project.is_deleted == False).all()
     response_data_dict = {"projectlist": projects}
     serialized_data = ProjectList.model_validate(response_data_dict).model_dump_json()
     await redis.set(ALL_PROJECTS_KEY, serialized_data, ex=CACHE_TTL)
-    
+
     return response_data_dict
 
 
@@ -93,24 +91,22 @@ async def get_project(
     """Get single project by ID - GET /projects/{project_id}"""
     SINGLE_PROJECT_KEY = f"project:{project_id}"
     cached = await redis.get(SINGLE_PROJECT_KEY)
-    
+
     if cached:
         return json.loads(cached)
-    
-    def sync_db_call():
-        return db.query(Project).filter(Project.id == project_id).first()
-    
-    db_project = await run_in_threadpool(sync_db_call)
+
+    # Query directly without run_in_threadpool since db session is from middleware
+    db_project = db.query(Project).filter(Project.id == project_id).first()
 
     if not db_project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Project with id {project_id} not found"
         )
-    
+
     project_json = ProjectOut.model_validate(db_project).model_dump_json()
     await redis.set(SINGLE_PROJECT_KEY, project_json, ex=CACHE_TTL)
-    
+
     return db_project
 
 
@@ -155,18 +151,25 @@ async def delete_project(
     current_user: User = Depends(admin_required),
     db: Session = Depends(get_db)
 ):
-    """Delete project (admin only) - DELETE /projects/{project_id}"""
+    """Soft delete project (admin only) - DELETE /projects/{project_id}"""
     db_project = db.query(Project).filter(
-        Project.id == project_id
+        Project.id == project_id,
+        Project.is_deleted == False
     ).first()
-    
+
     if not db_project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Project with id {project_id} not found"
         )
-    
-    db.delete(db_project)
+
+    # Soft delete
+    import datetime
+    db_project.is_deleted = True
+    db_project.deleted_at = datetime.datetime.utcnow()
+    db_project.deleted_by = current_user.id
+    db.flush()
+
     return None
 
 

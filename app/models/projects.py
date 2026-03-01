@@ -2,8 +2,10 @@ from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.utils.database import Base
 from sqlalchemy.sql import func
+from app.models.mixins import SoftDeleteMixin
 
-class Project(Base):
+
+class Project(Base, SoftDeleteMixin):
     __tablename__ = "projects"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -15,7 +17,7 @@ class Project(Base):
     tags = Column(String, nullable=True)  # comma-separated
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
-    
+
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
     creator = relationship("User", back_populates="projects_created")
     members = relationship("ProjectMembers", back_populates="project", cascade="all, delete-orphan")

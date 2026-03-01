@@ -132,8 +132,10 @@ async def list_tasks(
             )
         assigned_to = current_user.id
 
+    # Base query with soft delete filter
     query = db.query(Task).filter(
-        Task.project_id == project_id
+        Task.project_id == project_id,
+        Task.is_deleted == False
     )
 
     if status_filter is not None:
@@ -270,17 +272,24 @@ async def delete_task(
     current_user: User = Depends(leader_or_admin_required),
     db: Session = Depends(get_db)
 ):
-    """Delete task - DELETE /projects/{project_id}/tasks/{task_id}"""
+    """Soft delete task - DELETE /projects/{project_id}/tasks/{task_id}"""
     db_task = db.query(Task).filter(
         Task.project_id == project_id,
-        Task.id == task_id
+        Task.id == task_id,
+        Task.is_deleted == False
     ).first()
-    
+
     if not db_task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
         )
-    
-    db.delete(db_task)
+
+    # Soft delete
+    import datetime
+    db_task.is_deleted = True
+    db_task.deleted_at = datetime.datetime.utcnow()
+    db_task.deleted_by = current_user.id
+    db.flush()
+
     return None

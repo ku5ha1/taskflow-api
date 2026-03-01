@@ -7,10 +7,11 @@ from app.routes.projects import router as project_router
 from app.routes.tasks import router as task_router
 from app.routes.health import router as health_router
 from app.middleware.transaction import TransactionMiddleware
+from app.utils.audit import setup_audit_listeners
 
 app = FastAPI(
     title="TaskFlow API",
-    description="Task Management API with AI features",
+    description="Production-ready task management API with containerized infrastructure and audit logging",
     version="2.0.0"
 )
 
@@ -36,5 +37,6 @@ async def get_health():
 async def startup_event():
     """Initialize services on startup"""
     init_db()
+    setup_audit_listeners(Base)  # Initialize audit logging
     init_minio_buckets()
     create_super_admin()

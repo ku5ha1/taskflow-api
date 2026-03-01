@@ -2,8 +2,10 @@ from app.utils.database import Base
 from sqlalchemy import Column, String, DateTime, Integer, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func 
+from app.models.mixins import SoftDeleteMixin
+
  
-class User(Base):
+class User(Base, SoftDeleteMixin):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
