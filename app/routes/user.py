@@ -6,19 +6,16 @@ from app.utils.auth import (
     hash_password, 
     create_access_token, 
     create_refresh_token,
-    get_current_user,
-    get_current_active_user,
     authenticate_user
 )
-from app.utils.database import get_db
+from app.utils.dependencies import get_db, get_current_active_user, admin_required
 from sqlalchemy.orm import Session
-from app.utils.depedency import admin_required
 from typing import List
 from app.utils.storage import StorageService
 from app.config import settings
 import datetime as dt
 
-router = APIRouter(prefix="/users", tags=["User"])
+router = APIRouter(prefix="/users", tags=["Users"])
 
 # Initialize StorageService with settings
 storage = StorageService()
@@ -43,7 +40,6 @@ async def login(
     
     # Update last login
     user.last_login = dt.datetime.utcnow()
-    db.commit()
     
     # Create access and refresh tokens
     access_token = create_access_token(data={"sub": str(user.id)})
@@ -62,13 +58,13 @@ async def login(
     }
 
 
-@router.post("/create", response_model=UserOut)
+@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate, 
     current_user: User = Depends(admin_required),
     db: Session = Depends(get_db)
 ):
-    """Create a new user (admin only)"""
+    """Create a new user (admin only) - POST /users"""
     db_user = db.query(User).filter(
         User.email == user_data.email
     ).first()
@@ -82,44 +78,64 @@ async def create_user(
     hashed_password = hash_password(user_data.password)
     profile_picture = user_data.profile_picture or settings.default_avatar_url
     
-    try:
-        new_user = User(
-            username=user_data.username,
-            email=user_data.email,
-            hashed_password=hashed_password,
-            profile_picture=profile_picture,
-            bio=user_data.bio,
-            timezone=user_data.timezone or "UTC"
-        )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-    
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not create user"
-        )
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hashed_password,
+        profile_picture=profile_picture,
+        bio=user_data.bio,
+        timezone=user_data.timezone or "UTC"
+    )
+    db.add(new_user)
+    db.flush()
+    db.refresh(new_user)
+    return new_user
 
 
 @router.get("/me", response_model=UserOut)
-async def read_current_user(
+async def get_current_user_profile(
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get current user profile"""
+    """Get current user profile - GET /users/me"""
     return current_user
 
 
-@router.put("/update/{user_id}", response_model=UserOut)
+@router.get("", response_model=List[UserOut])
+async def list_users(
+    current_user: User = Depends(admin_required),
+    db: Session = Depends(get_db)
+):
+    """Get all users (admin only) - GET /users"""
+    all_users = db.query(User).all()
+    return all_users
+
+
+@router.get("/{user_id}", response_model=UserOut)
+async def get_user(
+    user_id: int,
+    current_user: User = Depends(admin_required),
+    db: Session = Depends(get_db)
+):
+    """Get specific user by ID (admin only) - GET /users/{user_id}"""
+    db_user = db.query(User).filter(User.id == user_id).first()
+    
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found"
+        )
+    
+    return db_user
+
+
+@router.put("/{user_id}", response_model=UserOut)
 async def update_user(
     user_id: int, 
     user_data: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_required)
 ):
-    """Update user (admin only)"""
+    """Update user (admin only) - PUT /users/{user_id}"""
     db_user = db.query(User).filter(User.id == user_id).first()
     
     if not db_user:
@@ -128,39 +144,31 @@ async def update_user(
             detail=f"User with id {user_id} not found"
         )
 
-    try:
-        if user_data.username:
-            db_user.username = user_data.username
-        if user_data.email:
-            db_user.email = user_data.email
-        if user_data.password:
-            db_user.hashed_password = hash_password(user_data.password)
-        if user_data.profile_picture is not None:
-            db_user.profile_picture = user_data.profile_picture
-        if user_data.bio is not None:
-            db_user.bio = user_data.bio
-        if user_data.timezone is not None:
-            db_user.timezone = user_data.timezone
+    if user_data.username:
+        db_user.username = user_data.username
+    if user_data.email:
+        db_user.email = user_data.email
+    if user_data.password:
+        db_user.hashed_password = hash_password(user_data.password)
+    if user_data.profile_picture is not None:
+        db_user.profile_picture = user_data.profile_picture
+    if user_data.bio is not None:
+        db_user.bio = user_data.bio
+    if user_data.timezone is not None:
+        db_user.timezone = user_data.timezone
 
-        db.commit()
-        db.refresh(db_user)
-        return db_user
-    
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not update user"
-        )
+    db.flush()
+    db.refresh(db_user)
+    return db_user
 
 
-@router.delete("/delete/{user_id}")
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int, 
     current_user: User = Depends(admin_required),
     db: Session = Depends(get_db)
 ):
-    """Delete user (admin only)"""
+    """Delete user (admin only) - DELETE /users/{user_id}"""
     db_user = db.query(User).filter(User.id == user_id).first()
     
     if not db_user:
@@ -169,26 +177,17 @@ async def delete_user(
             detail=f"User with id {user_id} not found"
         )
     
-    try:
-        db.delete(db_user)
-        db.commit()
-        return {"message": "User deleted successfully"}
-    
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not delete user"
-        )
+    db.delete(db_user)
+    return None
 
 
-@router.patch("/me/update-profile-picture", response_model=UserOut)
-async def update_profile_picture(
+@router.patch("/me/profile-picture", response_model=UserOut)
+async def update_current_user_profile_picture(
     file: UploadFile = File(...),
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update current user's profile picture"""
+    """Update current user's profile picture - PATCH /users/me/profile-picture"""
     try:
         content = await file.read()
         filename = file.filename or f"profile_pic_{current_user.id}"
@@ -204,27 +203,10 @@ async def update_profile_picture(
         
         # Store signed URL in user profile
         current_user.profile_picture = upload_result["url"]
-        db.commit()
+        db.flush()
         db.refresh(current_user)
         
         return current_user
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update profile picture: {str(e)}"
-        )
     
     finally:
         await file.close()
-
-
-@router.get("/all", response_model=List[UserOut])
-async def get_all_users(
-    current_user: User = Depends(admin_required),
-    db: Session = Depends(get_db)
-):
-    """Get all users (admin only)"""
-    all_users = db.query(User).all()
-    return all_users

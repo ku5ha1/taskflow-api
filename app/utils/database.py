@@ -1,7 +1,7 @@
 import logging
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker 
-from sqlalchemy.ext.declarative import declarative_base 
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.pool import QueuePool
 from app.config import settings
 
@@ -22,18 +22,7 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
-Base = declarative_base() 
-
-async def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Database session error: {e}")
-        raise
-    finally:
-        db.close()
+Base = declarative_base()
 
 
 async def check_db_health() -> bool:
