@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from app.utils.dependencies import get_db, get_current_active_user
+from app.utils.permissions import RoleChecker
 from app.models.tasks import Task
 from app.models.user import User
 from app.models.project_members import ProjectMembers
@@ -12,61 +13,14 @@ import datetime
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["Tasks"])
 
 
-def leader_or_admin_required(
-    current_user: User = Depends(get_current_active_user)
-) -> User:
-    """Verify user is admin or project leader"""
-    if not current_user.is_admin:
-        # Additional project-specific checks would go here
-        pass
-    return current_user
-
-
-def can_view_task(
-    project_id: int,
-    task_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-) -> Task:
-    """Verify user can view the task"""
-    db_task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.project_id == project_id
-    ).first()
-    
-    if not db_task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found"
-        )
-    
-    # Admin can view all tasks
-    if current_user.is_admin:
-        return db_task
-    
-    # Check if user is project member
-    membership = db.query(ProjectMembers).filter(
-        ProjectMembers.project_id == project_id,
-        ProjectMembers.user_id == current_user.id
-    ).first()
-    
-    if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to view this task"
-        )
-    
-    return db_task
-
-
 @router.post("", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
 async def create_task(
     project_id: int,
     task_data: TaskCreate,
-    current_user: User = Depends(leader_or_admin_required),
+    current_user: User = Depends(RoleChecker("task:create", "project_id")),
     db: Session = Depends(get_db)
 ):
-    """Create a new task in project - POST /projects/{project_id}/tasks"""
+    """Create a new task in project (admin or leader) - POST /projects/{project_id}/tasks"""
     membership = db.query(ProjectMembers).filter(
         ProjectMembers.project_id == project_id,
         ProjectMembers.id == task_data.assigned_to_user
@@ -114,25 +68,10 @@ async def list_tasks(
     due_after: Optional[str] = Query(None),
     limit: Optional[int] = Query(None),
     offset: Optional[int] = Query(None),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(RoleChecker("task:view", "project_id")),
     db: Session = Depends(get_db)
 ):
     """List all tasks in project with filters - GET /projects/{project_id}/tasks"""
-    is_leader = db.query(ProjectMembers).filter(
-        ProjectMembers.project_id == project_id,
-        ProjectMembers.user_id == current_user.id,
-        ProjectMembers.role == ProjectMemberRole.LEADER.value
-    ).first()
-
-    if not is_leader and not current_user.is_admin:
-        if assigned_to and assigned_to != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only view your own tasks"
-            )
-        assigned_to = current_user.id
-
-    # Base query with soft delete filter
     query = db.query(Task).filter(
         Task.project_id == project_id,
         Task.is_deleted == False
@@ -176,9 +115,23 @@ async def list_tasks(
 
 @router.get("/{task_id}", response_model=TaskOut)
 async def get_task(
-    db_task: Task = Depends(can_view_task)
+    project_id: int,
+    task_id: int,
+    current_user: User = Depends(RoleChecker("task:view", "project_id")),
+    db: Session = Depends(get_db)
 ):
     """Get single task by ID - GET /projects/{project_id}/tasks/{task_id}"""
+    db_task = db.query(Task).filter(
+        Task.id == task_id,
+        Task.project_id == project_id
+    ).first()
+    
+    if not db_task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+    
     return db_task
 
 
@@ -187,7 +140,7 @@ async def update_task(
     project_id: int,
     task_id: int,
     new_task_data: TaskUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(RoleChecker("task:update", "project_id")),
     db: Session = Depends(get_db)
 ):
     """Update task - PUT /projects/{project_id}/tasks/{task_id}"""
@@ -269,27 +222,25 @@ async def update_task_status(
 async def delete_task(
     project_id: int,
     task_id: int,
-    current_user: User = Depends(leader_or_admin_required),
+    current_user: User = Depends(RoleChecker("task:delete", "project_id")),
     db: Session = Depends(get_db)
 ):
-    """Soft delete task - DELETE /projects/{project_id}/tasks/{task_id}"""
+    """Soft delete task (admin or leader) - DELETE /projects/{project_id}/tasks/{task_id}"""
     db_task = db.query(Task).filter(
         Task.project_id == project_id,
         Task.id == task_id,
         Task.is_deleted == False
     ).first()
-
+    
     if not db_task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
         )
-
-    # Soft delete
-    import datetime
+    
     db_task.is_deleted = True
     db_task.deleted_at = datetime.datetime.utcnow()
     db_task.deleted_by = current_user.id
     db.flush()
-
+    
     return None

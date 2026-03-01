@@ -8,7 +8,8 @@ from app.utils.auth import (
     create_refresh_token,
     authenticate_user
 )
-from app.utils.dependencies import get_db, get_current_active_user, admin_required
+from app.utils.dependencies import get_db, get_current_active_user
+from app.utils.permissions import RoleChecker
 from sqlalchemy.orm import Session
 from typing import List
 from app.utils.storage import StorageService
@@ -26,9 +27,7 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    """
-    OAuth2 compatible token login, get an access token for future requests
-    """
+    """OAuth2 compatible token login"""
     user = authenticate_user(db, form_data.username, form_data.password)
     
     if not user:
@@ -38,10 +37,8 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"}
         )
     
-    # Update last login
     user.last_login = dt.datetime.utcnow()
     
-    # Create access and refresh tokens
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
@@ -61,13 +58,11 @@ async def login(
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate, 
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(RoleChecker("user:create")),
     db: Session = Depends(get_db)
 ):
     """Create a new user (admin only) - POST /users"""
-    db_user = db.query(User).filter(
-        User.email == user_data.email
-    ).first()
+    db_user = db.query(User).filter(User.email == user_data.email).first()
     
     if db_user:
         raise HTTPException(
@@ -102,7 +97,7 @@ async def get_current_user_profile(
 
 @router.get("", response_model=List[UserOut])
 async def list_users(
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(RoleChecker("user:list")),
     db: Session = Depends(get_db)
 ):
     """Get all users (admin only) - GET /users"""
@@ -113,7 +108,7 @@ async def list_users(
 @router.get("/{user_id}", response_model=UserOut)
 async def get_user(
     user_id: int,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(RoleChecker("user:list")),
     db: Session = Depends(get_db)
 ):
     """Get specific user by ID (admin only) - GET /users/{user_id}"""
@@ -133,7 +128,7 @@ async def update_user(
     user_id: int, 
     user_data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(RoleChecker("user:update"))
 ):
     """Update user (admin only) - PUT /users/{user_id}"""
     db_user = db.query(User).filter(User.id == user_id).first()
@@ -164,25 +159,24 @@ async def update_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: int,
-    current_user: User = Depends(admin_required),
+    user_id: int, 
+    current_user: User = Depends(RoleChecker("user:delete")),
     db: Session = Depends(get_db)
 ):
     """Soft delete user (admin only) - DELETE /users/{user_id}"""
     db_user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
-
+    
     if not db_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with id {user_id} not found"
         )
-
-    # Soft delete
+    
     db_user.is_deleted = True
     db_user.deleted_at = dt.datetime.utcnow()
     db_user.deleted_by = current_user.id
     db.flush()
-
+    
     return None
 
 
@@ -198,7 +192,6 @@ async def update_current_user_profile_picture(
         filename = file.filename or f"profile_pic_{current_user.id}"
         content_type = file.content_type or "image/jpeg"
         
-        # Upload to MinIO and store metadata
         upload_result = await storage.upload_file(
             file_content=content,
             filename=filename,
@@ -206,7 +199,6 @@ async def update_current_user_profile_picture(
             user_id=current_user.id
         )
         
-        # Store signed URL in user profile
         current_user.profile_picture = upload_result["url"]
         db.flush()
         db.refresh(current_user)
