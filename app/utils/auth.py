@@ -1,77 +1,206 @@
-from passlib.context import CryptContext
-from jose import jwt, JWTError
-from datetime import datetime, timedelta
+import jwt
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
-from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.utils.database import get_db
+from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
 from app.models.user import User
-import os
-from dotenv import load_dotenv 
+from app.config import settings
 
-load_dotenv()
+# Initialize password hasher with Argon2id (modern, secure)
+pwd_hash = PasswordHash((Argon2Hasher(),))
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-if SECRET_KEY is None:
-    raise ValueError("Secret key not found")
+# OAuth2 scheme for token authentication
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/users/login",
+    scheme_name="JWT"
+)
 
-ALGORITHM = os.getenv("ALGORITHM")
-if ALGORITHM is None:
-    raise ValueError("Algorithm not found")
 
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-if ACCESS_TOKEN_EXPIRE_MINUTES is None:
-    raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES not found")
+def hash_password(plain_password: str) -> str:
+    """Hash a password using Argon2id"""
+    return pwd_hash.hash(plain_password)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
-
-def hash_password(plain_pwd: str) -> str:
-    # Truncate password to 72 bytes to comply with bcrypt's limit
-    truncated_pwd = plain_pwd.encode('utf-8')[:72].decode('utf-8', errors='ignore')
-    return pwd_context.hash(truncated_pwd)
-
-def verify_password(plain_pwd: str, hashed_pwd: str) -> bool:
-    # Truncate password to 72 bytes to comply with bcrypt's limit
-    truncated_pwd = plain_pwd.encode('utf-8')[:72].decode('utf-8', errors='ignore')
-    return pwd_context.verify(truncated_pwd, hashed_pwd)
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM) # type: ignore
-
-def decode_access_token(token: str):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
+        return pwd_hash.verify(plain_password, hashed_password)
+    except Exception:
+        return False
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT access token
+
+    Args:
+        data: Dictionary containing claims to encode in the token
+        expires_delta: Optional custom expiration time
+
+    Returns:
+        Encoded JWT token string
+    """
+    to_encode = data.copy()
+
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "access"
+    })
+
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.secret_key,
+        algorithm=settings.algorithm
+    )
+
+    return encoded_jwt
+
+
+def create_refresh_token(data: dict) -> str:
+    """
+    Create a JWT refresh token with longer expiration
+
+    Args:
+        data: Dictionary containing claims to encode in the token
+
+    Returns:
+        Encoded JWT refresh token string
+    """
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=7)  # 7 days for refresh token
+
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "refresh"
+    })
+
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.secret_key,
+        algorithm=settings.algorithm
+    )
+
+    return encoded_jwt
+
+
+def decode_token(token: str) -> dict:
+    """
+    Decode and verify a JWT token
+
+    Args:
+        token: JWT token string
+
+    Returns:
+        Decoded token payload
+
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm]
+        )
         return payload
-    except JWTError:
+
+    except jwt.ExpiredSignatureError:
         raise HTTPException(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"}
-        )   
+        )
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None
+) -> User:
+    """
+    Get the current authenticated user from JWT token
+
+    Args:
+        token: JWT token from Authorization header
+        request: FastAPI request object (contains db session from middleware)
+
+    Returns:
+        User object
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"}
+    )
+
     try:
-        payload = decode_access_token(token)
-        print("Decoded payload:", payload)
-        user_id = payload.get("sub") if isinstance(payload, dict) else None
-        print("User ID from token:", user_id)
+        payload = decode_token(token)
+        user_id: str = payload.get("sub")
+        token_type: str = payload.get("type")
 
-        if not user_id:
+        if user_id is None:
+            raise credentials_exception
+
+        if token_type != "access":
             raise HTTPException(
-                status_code=401,
-                detail="Invalid token payload"
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+                headers={"WWW-Authenticate": "Bearer"}
             )
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        print("User found:", user)
-        print("==================")
-        return user
-    except Exception as e:
-        print("Auth error:", str(e))
-        print("==================")
+
+    except HTTPException:
         raise
-    
+
+    except Exception:
+        raise credentials_exception
+
+    # Get db session from request state (set by TransactionMiddleware)
+    db: Session = request.state.db
+    user = db.query(User).filter(User.id == int(user_id)).first()
+
+    if user is None:
+        raise credentials_exception
+
+    return user
+
+
+def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    """
+    Authenticate a user by username and password
+
+    Args:
+        db: Database session
+        username: Username
+        password: Plain text password
+
+    Returns:
+        User object if authentication successful, None otherwise
+    """
+    user = db.query(User).filter(User.username == username).first()
+
+    if not user:
+        return None
+
+    if not verify_password(password, user.hashed_password):
+        return None
+
+    return user
